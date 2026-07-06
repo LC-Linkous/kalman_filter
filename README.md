@@ -1,15 +1,21 @@
 # kalman_examples
 
+<p align="center">
+  <img src="media/sim_bounce.PNG" alt="Display layers" width="700">
+</p>
+
+
 An interactive educational demo for experimenting with Kalman filtering. 
 
 This repo will eventually be split into several demos of increasing complexity. 
 
 In the current demo, balls bounce around a field under gravity, while a noisy sensor measures their **positions only**.
-There is one Kalman filter per ball that estimates position **and velocity** from the noisy measurements. Sidebar controlls
+There is one Kalman filter per ball that estimates position **and velocity** from the noisy measurements. Sidebar controls
 are used to change the 'world', the noise, and the filter tuning to see the impact of these controls live.
 
 This also demonstrates what happens when the filter's model is wrong, and how that shows up in the
-standard consistency metrics (NEES / NIS with chi-squared bounds).
+standard consistency metrics (NEES / NIS with chi-squared bounds) -- including a live NIS strip
+under the canvas that turns red the moment the filter's model is violated.
 
 
 ## Table of Contents
@@ -19,6 +25,7 @@ standard consistency metrics (NEES / NIS with chi-squared bounds).
 - [File Structure](#file-structure)
 - [The GUI](#the-gui)
   * [Live Simulation tab](#live-simulation-tab)
+  * [Live NIS strip](#live-nis-strip)
   * [Analysis tab](#analysis-tab)
   * [Sidebar controls](#sidebar-controls)
 - [The Headless Monte Carlo Study](#the-headless-monte-carlo-study)
@@ -87,8 +94,9 @@ tracked_ball.py     Couples one ball + one noisy sensor + one filter
                     (TrackedBall class) and records the aligned histories
                     (truth, measurements, estimates, NEES, NIS, bounces)
                     used by both front ends.
-run_gui.py          Entry point for the wxPython GUI: live canvas, sidebar
-                    controls, matplotlib analysis tab.
+run_gui.py          Entry point for the wxPython GUI: dark live canvas,
+                    live NIS strip, collapsible sidebar controls,
+                    matplotlib analysis tab.
 run_headless.py     Entry point for the Monte Carlo consistency study --
                     no GUI required; produces the report plots.
 ```
@@ -118,28 +126,47 @@ vs. mistuned filters).
 
 <p align="center">
   <!-- image: live simulation tab with all display layers labeled -->
-  <img src="media/kalman_UI.png" alt="Display layers" width="700">
+  <img src="media/sim_bounce.PNG" alt="Display layers" width="700">
 </p>
 
-Per ball, the canvas draws:
+The canvas is dark so the trails carry the color. Per ball, it draws:
 
 | Marker | Meaning |
 | ------ | ------- |
-| filled colored circle | latest noisy **measurement** -- the only thing the filter ever sees |
-| small gray dots | measurement trail |
-| colored outline circle (no fill) | **ground truth** (toggleable) |
-| pale colored dots | truth trail |
-| black ring + crosshair | **Kalman estimate** |
+| small colored dots | noisy **measurement** trail -- the only thing the filter ever sees |
+| solid colored line | **ground truth** trail (toggleable) |
+| colored outline circle (no fill) | ground truth's current position |
+| dashed light line | **Kalman estimate** trail |
+| light ring + crosshair | the estimate's current position |
+| translucent colored ellipse | the filter's **2-sigma position covariance** -- its own honest uncertainty cloud, which shrinks as the filter converges |
+| short light arrow | the **estimated velocity** -- the state the sensor never measures |
 
-Watch the black estimate ring hug the truth outline more tightly than the
-filled measurement ball jitters around it -- that's the filter earning its
-keep, on position it *measures* and velocity it never does.
+Watch the estimate ring hug the truth outline more tightly than the
+measurement dots jitter around it -- that's the filter earning its keep, on
+position it *measures* and velocity it never does. The velocity arrow makes
+the second half of that sentence visible: the sensor reports positions only,
+yet the arrow tracks the ball's true heading.
+
+Gravity is a fixed constant in this version. In a bounded box it changes the
+bounce rhythm rather than anything about estimation, so it earned a constant
+instead of a slider; the knobs that remain are the ones that change what the
+*filter* experiences.
+
+### Live NIS strip
+
+A slim strip under the canvas plots the NIS of ball 1 live, with the 95%
+chi-squared band (df = 2) shaded. The trace and readout are green while the
+filter is consistent and flip red when it isn't -- crank the *Filter Q
+multiplier* away from x1.0, or just watch a bounce, and consistency becomes
+something you *see* while playing rather than a tab you visit afterwards.
+NIS needs no ground truth, so this is exactly the health indicator you could
+run on a real system.
 
 ### Analysis tab
 
 <p align="center">
   <!-- image: analysis tab, trajectory + NEES + NIS plots -->
-  <img src="media/kalman_analysis.png" alt="Analysis tab" width="700">
+  <img src="media/analysis.PNG" alt="Analysis tab" width="700">
 </p>
 
 Press *Update Analysis* for the classic report plots for ball 1:
@@ -153,11 +180,13 @@ Press *Update Analysis* for the classic report plots for ball 1:
 
 ### Sidebar controls
 
+Controls are grouped into collapsible panes; World and Noise start open,
+Filter and Display start collapsed.
+
 | Group | Control | Effect |
 | ----- | ------- | ------ |
 | World | Number of balls | how many balls + filters (applied on Reset) |
 | World | Same start point & launch | all balls get an identical position and velocity on Reset, so only the noise realizations differ -- for filter-vs-filter comparison |
-| World | Gravity | downward acceleration, live |
 | World | Bounciness | restitution: fraction of speed kept per bounce, live |
 | World | Ball radius / Launch speed | applied on Reset |
 | Noise | Measurement noise sigma | sensor noise std in px, live (world **and** filter R) |
@@ -172,7 +201,7 @@ Press *Update Analysis* for the classic report plots for ball 1:
 A single run's NEES is noisy: any one step can poke outside the chi-squared
 bounds by chance. The textbook consistency test AVERAGES NEES over many
 independent runs; the average has much tighter chi-squared bounds
-(chi2(N*dof)/N). `run_headless.py` produces three figures on a huge field
+(chi2(N*dof)/N). run_headless.py produces three figures on a huge field
 (no bounces, so the linear model is exact):
 
 <p align="center">
@@ -193,34 +222,39 @@ Design decisions worth knowing about (several are common pitfalls in
 hand-rolled Kalman code):
 
 * **The world and the filter are strictly separated.** Real process noise is
-  random acceleration injected in `ball.py`; the filter never adds randomness,
+  random acceleration injected in ball.py; the filter never adds randomness,
   it only models it via Q. Filters model randomness, they don't add it.
-* **The filter's model matches the physics exactly.** `ball.py`'s kinematic
-  step and `models.py`'s F and B are the same equations, so "matched filter"
+* **The filter's model matches the physics exactly.** ball.py's kinematic
+  step and models.py's F and B are the same equations, so "matched filter"
   genuinely means matched and the NEES consistency tests are honest. Gravity
   enters as a known control input through B = [0, -dt^2/2, 0, -dt]'.
 * **H is a proper 2x4 measurement matrix.** Position only; velocity is
   inferred. This also keeps the innovation covariance S a healthy, invertible
   2x2.
-* **Joseph-form covariance update** (`(I-KH)P(I-KH)' + KRK'`) instead of the
+* **Joseph-form covariance update** ((I-KH)P(I-KH)' + KRK') instead of the
   short form, which is algebraically equal but can lose symmetry and
   positive-definiteness numerically over long runs.
 * **NEES is computed against ground truth** with a true matrix quadratic form
-  (`@`, never element-wise `*`), and the chi-squared bounds are derived from
-  `scipy.stats.chi2.ppf` with explicit degrees of freedom rather than
+  (@, never element-wise *), and the chi-squared bounds are derived from
+  scipy.stats.chi2.ppf with explicit degrees of freedom rather than
   hard-coded table values.
 * **Initialization from the first measurement** with honest velocity
   uncertainty (large P0 velocity variance), so there is no startup transient
   to explain away.
 * **Bounce physics is energy-honest.** Restitution is applied at reflection,
-  position overshoot is mirrored (no tunneling at speed), and `Ball.step()`
+  position overshoot is mirrored (no tunneling at speed), and Ball.step()
   reports which axis bounced so the optional bounce-aware filter mode
   reflects the correct velocity component.
-* **One y-flip.** Physics lives in a `y-up` world; the flip to screen
+* **The covariance ellipse is drawn from the filter's own P.** The 2-sigma
+  position ellipse comes from the eigendecomposition of P[:2, :2] each
+  frame -- it is the filter's self-reported uncertainty, not a smoothed
+  visual effect, which is why watching it shrink (or fail to) is meaningful.
+* **One y-flip.** Physics lives in a y-up world; the flip to screen
   coordinates happens once, at draw time, in the GUI panel.
 * All per-step histories (truth, measurement, estimate, NEES, NIS) stay
   index-aligned; the initialization step's NIS is recorded as NaN since it
-  has no innovation.
+  has no innovation (the live NIS strip and the analysis plots both simply
+  skip it).
 
 ## Architecture and Flow
 
@@ -265,10 +299,10 @@ will follow this general structure.
        ▼                               ▼
 ┌────────────────────┐       ┌──────────────────────┐
 │     run_gui.py     │       │   run_headless.py    │
-│  live canvas +     │       │  Monte Carlo study:  │
-│  sidebar controls  │       │  averaged NEES vs    │
-│  + analysis tab    │       │  chi² bounds,        │
-│  (per-ball filter) │       │  matched vs mistuned │
+│  dark live canvas  │       │  Monte Carlo study:  │
+│  + live NIS strip  │       │  averaged NEES vs    │
+│  + sidebar groups  │       │  chi² bounds,        │
+│  + analysis tab    │       │  matched vs mistuned │
 └────────────────────┘       └──────────────────────┘
 ```
 
