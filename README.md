@@ -1,21 +1,26 @@
-# kalman_examples
+# kalman_filter
 
 <p align="center">
   <img src="media/sim_bounce.PNG" alt="Display layers" width="700">
 </p>
 
 
-An interactive educational demo for experimenting with Kalman filtering. 
+An interactive demo for experimenting with Kalman filtering. 
 
-This repo will eventually be split into several demos of increasing complexity. 
-
-In the current demo, balls bounce around a field under gravity, while a noisy sensor measures their **positions only**.
+In this example, balls bounce around a field under gravity, while a noisy sensor measures their **positions only**.
 There is one Kalman filter per ball that estimates position **and velocity** from the noisy measurements. Sidebar controls
 are used to change the 'world', the noise, and the filter tuning to see the impact of these controls live.
 
 This also demonstrates what happens when the filter's model is wrong, and how that shows up in the
 standard consistency metrics (NEES / NIS with chi-squared bounds) -- including a live NIS strip
 under the canvas that turns red the moment the filter's model is violated.
+
+The demo is built around two front ends and one operational 'engine'. The wxPython GUI is for
+experimenting live; the headless Monte Carlo script is a simple formal consistency study (averaged
+NEES against chi-squared bounds, matched vs. mistuned filters). The implementation has been verified
+numerically: over 60 Monte Carlo runs with a matched filter, mean NEES = 3.96 (theory: 4.0), mean
+NIS = 2.00 (theory: 2.0), and the averaged NEES stays within its chi-squared bounds for 95% of steps.
+
 
 
 ## Table of Contents
@@ -61,7 +66,7 @@ python run_headless.py 200 # same, with 200 runs instead of the default 50
 ## File Structure
 
 ```
-kalman_examples/
+kalman_filter/
 ├── README.md
 ├── requirements.txt
 ├── media/
@@ -102,24 +107,6 @@ run_headless.py     Entry point for the Monte Carlo consistency study --
 ```
 
 
-### Examples
-
-`example 1` - this is the core, and only, demo included right now. It has been verified numerically: 
-over 60 Monte Carlo runs with a matched filter, mean NEES = 3.96 (theory: 4.0), mean NIS = 2.00 (theory: 2.0), 
-and the averaged NEES stays within its chi-squared bounds for 95% of steps.
-
-
-
-
-Each example is built around a standard structure. There are two front ends, and one operational 'engine'. 
-The two front ends, a wxPython GUI and a headless Monte Carlo script, are used to experiment live or collect data. 
-The Monte Carlo script is a simple formal consistency study (averaged NEES against chi-squared bounds, matched
-vs. mistuned filters).
-
-
-
-
-
 ## The GUI
 
 ### Live Simulation tab
@@ -142,10 +129,13 @@ The canvas is dark so the trails carry the color. Per ball, it draws:
 | short light arrow | the **estimated velocity** -- the state the sensor never measures |
 
 Watch the estimate ring hug the truth outline more tightly than the
-measurement dots jitter around it -- that's the filter earning its keep, on
-position it *measures* and velocity it never does. The velocity arrow makes
-the second half of that sentence visible: the sensor reports positions only,
-yet the arrow tracks the ball's true heading.
+measurement dots jitter around it; that's the impact of the filter. It
+produces a better position estimate than any single measurement, even
+though position is all it ever sees.
+
+The filter also estimates velocity, a state the sensor never measures at
+all. The velocity arrow makes this visible: the sensor reports positions
+only, yet the arrow tracks the ball's true heading.
 
 Gravity is a fixed constant in this version. In a bounded box it changes the
 bounce rhythm rather than anything about estimation, so it earned a constant
@@ -308,8 +298,6 @@ will follow this general structure.
 
 ## Development and future work
 
-* **Standard student experiment write ups** - for undergraduate students with 
-some math background.
 * **Obstacle maps from images** - parse a black/white image into a collision
   grid so balls bounce off arbitrary shapes, not just the four walls.
 * **Extended / unscented filters** for a nonlinear measurement (e.g. a
